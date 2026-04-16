@@ -7,6 +7,7 @@ const toPayload = (level, message, meta = {}) => {
   };
 };
 
+// Structured JSON logs are easier to search and parse in production systems.
 const info = (message, meta = {}) => {
   console.log(JSON.stringify(toPayload("info", message, meta)));
 };

@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const { SUPPORTED_CURRENCIES } = require("../config/paymentConfig");
 
 const sendValidationError = (res, errors) => {
+  // Keep validation responses machine-readable and consistent across endpoints.
   return res.status(400).json({
     success: false,
     message: "Validation error",
@@ -11,6 +12,7 @@ const sendValidationError = (res, errors) => {
 
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
 
+// Intent creation only accepts the appointment identifier plus optional display fields.
 const validateCreateIntent = (req, res, next) => {
   const errors = [];
   const { appointmentId, currency, description } = req.body || {};
@@ -42,6 +44,7 @@ const validateCreateIntent = (req, res, next) => {
   next();
 };
 
+// Confirm supports either identifier to stay backward compatible with older clients.
 const validateConfirmPayment = (req, res, next) => {
   const errors = [];
   const { appointmentId, paymentIntentId, paymentMethodId } = req.body || {};
@@ -69,6 +72,7 @@ const validateConfirmPayment = (req, res, next) => {
   next();
 };
 
+// Mongo-backed routes use a defensive ObjectId guard before querying the database.
 const validateMongoIdParam = (paramName) => {
   return (req, res, next) => {
     const value = req.params?.[paramName];
@@ -81,6 +85,7 @@ const validateMongoIdParam = (paramName) => {
   };
 };
 
+// Appointment identifiers are validated as non-empty strings because they are upstream-managed ids.
 const validateAppointmentIdParam = (req, res, next) => {
   const appointmentId = req.params?.appointmentId;
 

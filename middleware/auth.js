@@ -4,6 +4,7 @@ const protect = (req, res, next) => {
   const serviceToken = req.headers["x-service-token"];
   const serviceName = req.headers["x-service-name"] || "internal-service";
 
+  // Service-to-service traffic is authenticated with a shared secret instead of gateway headers.
   if (serviceToken) {
     const expectedToken = process.env.INTERNAL_SERVICE_TOKEN;
 
@@ -37,6 +38,7 @@ const protect = (req, res, next) => {
 
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
+    // Internal services are allowed through because they already authenticate at the transport layer.
     if (req.user.role === "service") {
       return next();
     }
