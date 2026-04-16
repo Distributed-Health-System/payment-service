@@ -1,0 +1,32 @@
+# Dependencies
+node_modules
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Tests and coverage
+test
+coverage
+.nyc_output
+
+# Tooling & repo metadata
+.git
+.gitignore
+.github
+.vscode
+.idea
+.dockerignore
+
+# Logs & OS cruft
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Local docs and compose files
+README.md
+docker-compose.yml
+.prettierrc
+eslint.config.mjs
