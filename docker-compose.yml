@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  payment-service:
+    build: .
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - MONGO_URI=${MONGO_URI}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    depends_on:
+      - mongo
+    networks:
+      - healthcare-network
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - healthcare-network
+
+volumes:
+  mongo-data:
+
+networks:
+  healthcare-network:
+    external: true
