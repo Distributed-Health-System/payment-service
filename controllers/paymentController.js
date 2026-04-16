@@ -8,6 +8,7 @@ const {
 const { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } = require("../config/paymentConfig");
 const logger = require("../utils/logger");
 
+// Stripe status is intentionally normalized to the service's own payment lifecycle.
 const mapStripeStatusToLocalStatus = (stripeStatus) => {
   if (stripeStatus === "succeeded") return "succeeded";
   if (stripeStatus === "canceled" || stripeStatus === "requires_payment_method") {
@@ -30,6 +31,7 @@ const canAccessPayment = (payment, user) => {
   return false;
 };
 
+// Resolve the final charge currency once, rather than trusting client input blindly.
 const resolveCurrency = (requestedCurrency, appointmentCurrency) => {
   const candidate = (requestedCurrency || appointmentCurrency || DEFAULT_CURRENCY).toLowerCase();
   if (!SUPPORTED_CURRENCIES.includes(candidate)) {
@@ -60,6 +62,7 @@ const createSyncState = (status, errorMessage, previousRetryCount = 0) => {
   return state;
 };
 
+// Downstream sync is idempotent: repeated terminal updates should not duplicate effects.
 const syncPaymentLifecycle = async (payment) => {
   const appointmentStatus = mapLocalStatusToAppointmentStatus(payment.status);
   const notificationStatus = payment.status.toUpperCase();
@@ -140,6 +143,7 @@ const syncPaymentLifecycle = async (payment) => {
   await payment.save();
 };
 
+// Appointment lookups are authoritative; authorization is derived from the billing record.
 const assertAppointmentAccess = async (appointmentId, reqUser) => {
   if (reqUser.role === "admin" || reqUser.role === "service") {
     return;
@@ -155,6 +159,7 @@ const assertAppointmentAccess = async (appointmentId, reqUser) => {
   }
 };
 
+// Reuse an existing pending record so retried intent creation stays stable.
 const getActivePaymentForAppointment = async (appointmentId) => {
   const pendingPayment = await Payment.findOne({ appointmentId, status: "pending" }).sort({
     createdAt: -1,
@@ -165,6 +170,7 @@ const getActivePaymentForAppointment = async (appointmentId) => {
   return latestPayment;
 };
 
+// Create the Stripe intent from server-side billing data, not from the client payload.
 const createPaymentIntent = async (req, res) => {
   const { appointmentId, currency: requestedCurrency, description } = req.body;
 
@@ -237,6 +243,7 @@ const createPaymentIntent = async (req, res) => {
   });
 };
 
+// Confirm accepts either identifier to remain backward compatible with older callers.
 const confirmPayment = async (req, res) => {
   const { paymentIntentId, appointmentId, paymentMethodId } = req.body;
 
@@ -294,6 +301,7 @@ const confirmPayment = async (req, res) => {
   });
 };
 
+// Authorization is checked on the resolved payment record before any details are returned.
 const getPaymentById = async (req, res) => {
   const payment = await Payment.findById(req.params.id);
 
@@ -312,6 +320,7 @@ const getPaymentById = async (req, res) => {
   res.json({ success: true, payment });
 };
 
+// Appointment-level lookup is guarded by authoritative billing ownership checks.
 const getPaymentsByAppointment = async (req, res) => {
   await assertAppointmentAccess(req.params.appointmentId, req.user);
 
@@ -322,16 +331,19 @@ const getPaymentsByAppointment = async (req, res) => {
   res.json({ success: true, payments });
 };
 
+// Patient-facing payment history stays scoped to the authenticated caller.
 const getMyPayments = async (req, res) => {
   const payments = await Payment.find({ patientId: req.user.id }).sort({ createdAt: -1 });
   res.json({ success: true, payments });
 };
 
+// Admin overview intentionally returns the full payment timeline.
 const getAllPayments = async (req, res) => {
   const payments = await Payment.find().sort({ createdAt: -1 });
   res.json({ success: true, count: payments.length, payments });
 };
 
+// Only succeeded payments can be refunded, and the Stripe charge id must exist first.
 const refundPayment = async (req, res) => {
   const payment = await Payment.findById(req.params.id);
 
@@ -366,6 +378,7 @@ const refundPayment = async (req, res) => {
   res.json({ success: true, payment });
 };
 
+// Webhook events are the final source of truth for Stripe state transitions.
 const updatePaymentFromIntent = async ({ payment, intentStatus, latestCharge }) => {
   const mappedStatus = mapStripeStatusToLocalStatus(intentStatus);
   payment.status = mappedStatus;

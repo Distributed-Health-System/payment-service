@@ -17,8 +17,11 @@ const {
   validateAppointmentIdParam,
 } = require("../middleware/validation");
 
+// Patient-facing payment creation and confirmation endpoints.
 router.post("/intent", protect, authorizeRoles("patient"), validateCreateIntent, createPaymentIntent);
 router.post("/confirm", protect, authorizeRoles("patient"), validateConfirmPayment, confirmPayment);
+
+// Scoped payment queries and admin reporting paths.
 router.get("/my", protect, authorizeRoles("patient"), getMyPayments);
 router.get("/all", protect, authorizeRoles("admin"), getAllPayments);
 router.get(
