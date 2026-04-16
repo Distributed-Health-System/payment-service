@@ -8,6 +8,10 @@ const createPaymentIntent = async (req, res) => {
   const paymentIntent = await stripe.paymentIntents.create({
     amount: Math.round(amount * 100),
     currency,
+    automatic_payment_methods: {
+      enabled: true,
+      allow_redirects: "never",
+    },
     metadata: { appointmentId, patientId, doctorId },
     description,
   });
@@ -26,14 +30,15 @@ const createPaymentIntent = async (req, res) => {
   res.status(201).json({
     success: true,
     clientSecret: paymentIntent.client_secret,
+    paymentIntentId: paymentIntent.id,
     paymentId: payment._id,
   });
 };
 
 const confirmPayment = async (req, res) => {
-  const { paymentIntentId } = req.body;
+  const { paymentIntentId, paymentMethodId } = req.body;
 
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  let paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
   const payment = await Payment.findOne({ stripePaymentIntentId: paymentIntentId });
 
@@ -43,16 +48,35 @@ const confirmPayment = async (req, res) => {
     throw err;
   }
 
+  // For API-only testing (e.g., Postman), try confirming server-side when action is still required.
+  if (
+    paymentIntent.status === "requires_payment_method" ||
+    paymentIntent.status === "requires_confirmation"
+  ) {
+    paymentIntent = await stripe.paymentIntents.confirm(paymentIntentId, {
+      payment_method: paymentMethodId || "pm_card_visa",
+    });
+  }
+
   if (paymentIntent.status === "succeeded") {
     payment.status = "succeeded";
     payment.stripeChargeId = paymentIntent.latest_charge;
     await payment.save();
-  } else {
+  } else if (paymentIntent.status === "canceled") {
     payment.status = "failed";
+    await payment.save();
+  } else {
+    // Keep non-terminal states as pending until Stripe finalizes the payment.
+    payment.status = "pending";
     await payment.save();
   }
 
-  res.json({ success: true, payment });
+  res.json({
+    success: true,
+    stripeStatus: paymentIntent.status,
+    stripeLastError: paymentIntent.last_payment_error?.message || null,
+    payment,
+  });
 };
 
 const getPaymentById = async (req, res) => {
