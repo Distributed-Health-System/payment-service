@@ -8,6 +8,7 @@ const {
 
 const RETRYABLE_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
+// Parse JSON defensively so a non-JSON error body still produces a usable message.
 const parseJsonSafe = async (response) => {
   const text = await response.text();
   if (!text) return {};
@@ -19,6 +20,7 @@ const parseJsonSafe = async (response) => {
   }
 };
 
+// Internal calls share a service identity and optional shared secret.
 const buildHeaders = () => {
   const headers = {
     "Content-Type": "application/json",
@@ -34,6 +36,7 @@ const buildHeaders = () => {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Retry only transient classes of failures; permanent errors should fail fast.
 const shouldRetryError = (error) => {
   if (error.name === "AbortError") return true;
   if (typeof error.statusCode === "number") {
@@ -43,6 +46,7 @@ const shouldRetryError = (error) => {
   return false;
 };
 
+// Abort slow downstream calls so payment requests never hang indefinitely.
 const fetchWithTimeout = async (url, options) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DOWNSTREAM_TIMEOUT_MS);
@@ -54,6 +58,7 @@ const fetchWithTimeout = async (url, options) => {
   }
 };
 
+// Retry bounded requests while preserving the first useful failure response.
 const requestJson = async (url, options) => {
   let lastError;
 
@@ -84,6 +89,7 @@ const requestJson = async (url, options) => {
   throw lastError || new Error("Downstream request failed");
 };
 
+// Probe the canonical endpoint first, then fallback-compatible variants.
 const tryEndpoints = async (baseUrl, endpointCandidates, options) => {
   let lastError;
 
@@ -98,6 +104,7 @@ const tryEndpoints = async (baseUrl, endpointCandidates, options) => {
   throw lastError || new Error("Downstream request failed");
 };
 
+// Appointment-service owns the billing truth; payment-service only consumes it.
 const getAppointmentById = async (appointmentId) => {
   const data = await tryEndpoints(
     APPOINTMENT_SERVICE_URL,
@@ -111,6 +118,7 @@ const getAppointmentById = async (appointmentId) => {
   return data.appointment || data.data || data;
 };
 
+// Normalize the appointment payload shape across versions of the upstream service.
 const resolveFee = (appointment) => {
   return (
     appointment.consultationFee ??
@@ -123,6 +131,7 @@ const resolveFee = (appointment) => {
   );
 };
 
+// Pull owner identifiers from whichever upstream shape is available.
 const resolvePatientId = (appointment) => {
   return (
     appointment.patientId ||
@@ -141,6 +150,7 @@ const resolveDoctorId = (appointment) => {
   );
 };
 
+// Return the canonical billing view used for Stripe intent creation.
 const getAppointmentBilling = async (appointmentId) => {
   const appointment = await getAppointmentById(appointmentId);
   const amount = resolveFee(appointment);
@@ -169,6 +179,7 @@ const getAppointmentBilling = async (appointmentId) => {
   };
 };
 
+// Idempotency key helps downstream updates stay safe on retries.
 const updateAppointmentPaymentStatus = async ({ appointmentId, paymentStatus, paymentId }) => {
   const headers = buildHeaders();
   headers["x-idempotency-key"] = `appointment:${appointmentId}:${paymentStatus}`;
@@ -187,6 +198,7 @@ const updateAppointmentPaymentStatus = async ({ appointmentId, paymentStatus, pa
   );
 };
 
+// Notification calls follow the same bounded retry and idempotency rules.
 const sendPaymentNotification = async ({ patientId, doctorId, appointmentId, paymentStatus, amount, currency }) => {
   const headers = buildHeaders();
   headers["x-idempotency-key"] = `notification:${appointmentId}:${paymentStatus}`;

@@ -61,6 +61,7 @@ const paymentSchema = new mongoose.Schema(
     description: {
       type: String,
     },
+    // Sync metadata stores downstream result state so retries and audits remain observable.
     sync: {
       appointment: {
         type: syncStateSchema,
@@ -71,6 +72,7 @@ const paymentSchema = new mongoose.Schema(
         default: () => ({ status: "pending" }),
       },
     },
+    // Stripe webhook ids are stored to make repeated event delivery safe.
     processedWebhookEventIds: {
       type: [String],
       default: [],
@@ -79,6 +81,7 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Indexes support the most common access patterns and keep Stripe identifiers unique.
 paymentSchema.index({ stripePaymentIntentId: 1 }, { unique: true, sparse: true });
 paymentSchema.index({ stripeChargeId: 1 }, { sparse: true });
 paymentSchema.index({ appointmentId: 1, createdAt: -1 });
