@@ -1,26 +1,6 @@
 const protect = (req, res, next) => {
   const userId = req.headers['x-user-id'];
   const userRole = req.headers['x-user-role'];
-  const serviceToken = req.headers["x-service-token"];
-  const serviceName = req.headers["x-service-name"] || "internal-service";
-
-  // Service-to-service traffic is authenticated with a shared secret instead of gateway headers.
-  if (serviceToken) {
-    const expectedToken = process.env.INTERNAL_SERVICE_TOKEN;
-
-    if (!expectedToken || serviceToken !== expectedToken) {
-      const err = new Error("Invalid internal service token");
-      err.statusCode = 401;
-      return next(err);
-    }
-
-    req.user = {
-      id: serviceName,
-      role: "service",
-    };
-
-    return next();
-  }
 
   if (!userId || !userRole) {
     const err = new Error('Missing auth headers - request not coming through gateway');
@@ -38,11 +18,6 @@ const protect = (req, res, next) => {
 
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
-    // Internal services are allowed through because they already authenticate at the transport layer.
-    if (req.user.role === "service") {
-      return next();
-    }
-
     if (!roles.includes(req.user.role)) {
       const err = new Error(`Role '${req.user.role}' is not authorized`);
       err.statusCode = 403;
