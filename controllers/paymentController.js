@@ -5,13 +5,19 @@ const {
   updateAppointmentPaymentStatus,
   sendPaymentNotification,
 } = require("../services/downstreamClients");
-const { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } = require("../config/paymentConfig");
+const {
+  DEFAULT_CURRENCY,
+  SUPPORTED_CURRENCIES,
+} = require("../config/paymentConfig");
 const logger = require("../utils/logger");
 
 // Stripe status is intentionally normalized to the service's own payment lifecycle.
 const mapStripeStatusToLocalStatus = (stripeStatus) => {
   if (stripeStatus === "succeeded") return "succeeded";
-  if (stripeStatus === "canceled" || stripeStatus === "requires_payment_method") {
+  if (
+    stripeStatus === "canceled" ||
+    stripeStatus === "requires_payment_method"
+  ) {
     return "failed";
   }
 
@@ -33,7 +39,11 @@ const canAccessPayment = (payment, user) => {
 
 // Resolve the final charge currency once, rather than trusting client input blindly.
 const resolveCurrency = (requestedCurrency, appointmentCurrency) => {
-  const candidate = (requestedCurrency || appointmentCurrency || DEFAULT_CURRENCY).toLowerCase();
+  const candidate = (
+    requestedCurrency ||
+    appointmentCurrency ||
+    DEFAULT_CURRENCY
+  ).toLowerCase();
   if (!SUPPORTED_CURRENCIES.includes(candidate)) {
     const err = new Error(`Unsupported currency '${candidate}'`);
     err.statusCode = 400;
@@ -68,8 +78,14 @@ const syncPaymentLifecycle = async (payment) => {
   const notificationStatus = payment.status.toUpperCase();
 
   payment.sync = payment.sync || {};
-  payment.sync.appointment = payment.sync.appointment || { status: "pending", retryCount: 0 };
-  payment.sync.notification = payment.sync.notification || { status: "pending", retryCount: 0 };
+  payment.sync.appointment = payment.sync.appointment || {
+    status: "pending",
+    retryCount: 0,
+  };
+  payment.sync.notification = payment.sync.notification || {
+    status: "pending",
+    retryCount: 0,
+  };
 
   const shouldSkipAppointmentSync =
     payment.sync.appointment.status === "success" &&
@@ -88,7 +104,11 @@ const syncPaymentLifecycle = async (payment) => {
       });
 
       payment.sync.appointment = {
-        ...createSyncState("success", null, payment.sync.appointment.retryCount || 0),
+        ...createSyncState(
+          "success",
+          null,
+          payment.sync.appointment.retryCount || 0,
+        ),
         lastSyncedPaymentStatus: appointmentStatus,
       };
     } catch (error) {
@@ -96,7 +116,7 @@ const syncPaymentLifecycle = async (payment) => {
         ...createSyncState(
           "failed",
           error.message,
-          payment.sync.appointment.retryCount || 0
+          payment.sync.appointment.retryCount || 0,
         ),
         lastSyncedPaymentStatus: appointmentStatus,
       };
@@ -120,7 +140,11 @@ const syncPaymentLifecycle = async (payment) => {
       });
 
       payment.sync.notification = {
-        ...createSyncState("success", null, payment.sync.notification.retryCount || 0),
+        ...createSyncState(
+          "success",
+          null,
+          payment.sync.notification.retryCount || 0,
+        ),
         lastSyncedPaymentStatus: notificationStatus,
       };
     } catch (error) {
@@ -128,7 +152,7 @@ const syncPaymentLifecycle = async (payment) => {
         ...createSyncState(
           "failed",
           error.message,
-          payment.sync.notification.retryCount || 0
+          payment.sync.notification.retryCount || 0,
         ),
         lastSyncedPaymentStatus: notificationStatus,
       };
@@ -150,10 +174,13 @@ const assertAppointmentAccess = async (appointmentId, reqUser) => {
   }
 
   const billing = await getAppointmentBilling(appointmentId);
-  const isAllowed = billing.patientId === reqUser.id || billing.doctorId === reqUser.id;
+  const isAllowed =
+    billing.patientId === reqUser.id || billing.doctorId === reqUser.id;
 
   if (!isAllowed) {
-    const err = new Error("Not authorized to view payments for this appointment");
+    const err = new Error(
+      "Not authorized to view payments for this appointment",
+    );
     err.statusCode = 403;
     throw err;
   }
@@ -161,12 +188,17 @@ const assertAppointmentAccess = async (appointmentId, reqUser) => {
 
 // Reuse an existing pending record so retried intent creation stays stable.
 const getActivePaymentForAppointment = async (appointmentId) => {
-  const pendingPayment = await Payment.findOne({ appointmentId, status: "pending" }).sort({
+  const pendingPayment = await Payment.findOne({
+    appointmentId,
+    status: "pending",
+  }).sort({
     createdAt: -1,
   });
   if (pendingPayment) return pendingPayment;
 
-  const latestPayment = await Payment.findOne({ appointmentId }).sort({ createdAt: -1 });
+  const latestPayment = await Payment.findOne({ appointmentId }).sort({
+    createdAt: -1,
+  });
   return latestPayment;
 };
 
@@ -182,7 +214,10 @@ const createPaymentIntent = async (req, res) => {
     throw err;
   }
 
-  const existingSucceeded = await Payment.findOne({ appointmentId, status: "succeeded" });
+  const existingSucceeded = await Payment.findOne({
+    appointmentId,
+    status: "succeeded",
+  });
   if (existingSucceeded) {
     return res.status(409).json({
       success: false,
@@ -192,12 +227,17 @@ const createPaymentIntent = async (req, res) => {
     });
   }
 
-  const existingPending = await Payment.findOne({ appointmentId, status: "pending" }).sort({
+  const existingPending = await Payment.findOne({
+    appointmentId,
+    status: "pending",
+  }).sort({
     createdAt: -1,
   });
 
   if (existingPending?.stripePaymentIntentId) {
-    const existingIntent = await stripe.paymentIntents.retrieve(existingPending.stripePaymentIntentId);
+    const existingIntent = await stripe.paymentIntents.retrieve(
+      existingPending.stripePaymentIntentId,
+    );
 
     return res.status(200).json({
       success: true,
@@ -267,15 +307,20 @@ const confirmPayment = async (req, res) => {
     throw err;
   }
 
-  let paymentIntent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId);
+  let paymentIntent = await stripe.paymentIntents.retrieve(
+    payment.stripePaymentIntentId,
+  );
 
   if (
     paymentIntent.status === "requires_payment_method" ||
     paymentIntent.status === "requires_confirmation"
   ) {
-    paymentIntent = await stripe.paymentIntents.confirm(payment.stripePaymentIntentId, {
-      payment_method: paymentMethodId || "pm_card_visa",
-    });
+    paymentIntent = await stripe.paymentIntents.confirm(
+      payment.stripePaymentIntentId,
+      {
+        payment_method: paymentMethodId || "pm_card_visa",
+      },
+    );
   }
 
   payment.status = mapStripeStatusToLocalStatus(paymentIntent.status);
@@ -324,7 +369,9 @@ const getPaymentById = async (req, res) => {
 const getPaymentsByAppointment = async (req, res) => {
   await assertAppointmentAccess(req.params.appointmentId, req.user);
 
-  const payments = await Payment.find({ appointmentId: req.params.appointmentId }).sort({
+  const payments = await Payment.find({
+    appointmentId: req.params.appointmentId,
+  }).sort({
     createdAt: -1,
   });
 
@@ -333,7 +380,9 @@ const getPaymentsByAppointment = async (req, res) => {
 
 // Patient-facing payment history stays scoped to the authenticated caller.
 const getMyPayments = async (req, res) => {
-  const payments = await Payment.find({ patientId: req.user.id }).sort({ createdAt: -1 });
+  const payments = await Payment.find({ patientId: req.user.id }).sort({
+    createdAt: -1,
+  });
   res.json({ success: true, payments });
 };
 
@@ -379,12 +428,17 @@ const refundPayment = async (req, res) => {
 };
 
 // Webhook events are the final source of truth for Stripe state transitions.
-const updatePaymentFromIntent = async ({ payment, intentStatus, latestCharge }) => {
+const updatePaymentFromIntent = async ({
+  payment,
+  intentStatus,
+  latestCharge,
+}) => {
   const mappedStatus = mapStripeStatusToLocalStatus(intentStatus);
   payment.status = mappedStatus;
 
   if (mappedStatus === "succeeded" && latestCharge) {
-    payment.stripeChargeId = typeof latestCharge === "string" ? latestCharge : latestCharge.id;
+    payment.stripeChargeId =
+      typeof latestCharge === "string" ? latestCharge : latestCharge.id;
   }
 
   await payment.save();
@@ -434,11 +488,15 @@ const handleStripeWebhook = async (req, res) => {
     payment = await Payment.findOne({ stripeChargeId: charge.id });
   } else {
     const paymentIntent = event.data.object;
-    payment = await Payment.findOne({ stripePaymentIntentId: paymentIntent.id });
+    payment = await Payment.findOne({
+      stripePaymentIntentId: paymentIntent.id,
+    });
   }
 
   if (!payment) {
-    return res.status(200).json({ success: true, ignored: true, reason: "payment_not_found" });
+    return res
+      .status(200)
+      .json({ success: true, ignored: true, reason: "payment_not_found" });
   }
 
   if (payment.processedWebhookEventIds.includes(event.id)) {
