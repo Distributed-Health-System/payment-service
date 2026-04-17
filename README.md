@@ -104,12 +104,13 @@ Appointment sync status mapping:
 
 Terminal states trigger sync to:
 - appointment-service payment status endpoint
+- appointment-service confirmed-payment webhook (`/appointments/webhook/payment`)
 - notification-service payment status endpoint
 
 Behavior:
 - bounded retries + timeout for downstream HTTP
 - idempotency key headers for downstream requests
-- per-payment sync metadata persisted in Mongo (`sync.appointment`, `sync.notification`)
+- per-payment sync metadata persisted in Mongo (`sync.appointment`, `sync.appointmentWebhook`, `sync.notification`)
 
 ## Stripe Webhooks
 
