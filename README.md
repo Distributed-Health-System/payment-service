@@ -25,7 +25,6 @@ Base paths:
 
 Headers:
 - User calls via gateway: `x-user-id`, `x-user-role`
-- Internal service calls: `x-service-token`, optional `x-service-name`
 
 ### Create Payment Intent
 
@@ -136,7 +135,6 @@ Required:
 Service integration:
 - `APPOINTMENT_SERVICE_URL` (default: `http://localhost:3001`)
 - `NOTIFICATION_SERVICE_URL` (default: `http://localhost:3003`)
-- `INTERNAL_SERVICE_TOKEN`
 - `SERVICE_NAME` (default: `payment-service`)
 
 Reliability tuning:

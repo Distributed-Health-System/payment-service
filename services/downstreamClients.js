@@ -20,18 +20,12 @@ const parseJsonSafe = async (response) => {
   }
 };
 
-// Internal calls share a service identity and optional shared secret.
+// Internal requests include a service identity header for downstream observability.
 const buildHeaders = () => {
-  const headers = {
+  return {
     "Content-Type": "application/json",
     "x-service-name": SERVICE_NAME,
   };
-
-  if (process.env.INTERNAL_SERVICE_TOKEN) {
-    headers["x-service-token"] = process.env.INTERNAL_SERVICE_TOKEN;
-  }
-
-  return headers;
 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
