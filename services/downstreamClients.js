@@ -192,6 +192,29 @@ const updateAppointmentPaymentStatus = async ({ appointmentId, paymentStatus, pa
   );
 };
 
+// Call the appointment service webhook immediately when payment is confirmed.
+const notifyAppointmentWebhook = async ({ appointmentId, transactionId }) => {
+  const headers = buildHeaders();
+  headers["x-idempotency-key"] = `appointment-webhook:${appointmentId}:${transactionId}`;
+
+  return tryEndpoints(
+    APPOINTMENT_SERVICE_URL,
+    [
+      "/appointments/webhook/payment",
+      "/api/appointments/webhook/payment",
+    ],
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        appointmentId,
+        status: "CONFIRMED",
+        transactionId,
+      }),
+    }
+  );
+};
+
 // Notification calls follow the same bounded retry and idempotency rules.
 const sendPaymentNotification = async ({ patientId, doctorId, appointmentId, paymentStatus, amount, currency }) => {
   const headers = buildHeaders();
@@ -218,5 +241,6 @@ const sendPaymentNotification = async ({ patientId, doctorId, appointmentId, pay
 module.exports = {
   getAppointmentBilling,
   updateAppointmentPaymentStatus,
+  notifyAppointmentWebhook,
   sendPaymentNotification,
 };
