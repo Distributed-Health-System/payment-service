@@ -3,6 +3,7 @@ const Payment = require("../models/Payment");
 const {
   getAppointmentBilling,
   updateAppointmentPaymentStatus,
+  notifyAppointmentWebhook,
   sendPaymentNotification,
 } = require("../services/downstreamClients");
 const {
@@ -91,6 +92,11 @@ const syncPaymentLifecycle = async (payment) => {
     payment.sync.appointment.status === "success" &&
     payment.sync.appointment.lastSyncedPaymentStatus === appointmentStatus;
 
+  const shouldSkipAppointmentWebhook =
+    payment.status === "succeeded" &&
+    payment.sync.appointmentWebhook?.status === "success" &&
+    payment.sync.appointmentWebhook.lastSyncedPaymentStatus === "CONFIRMED";
+
   const shouldSkipNotificationSync =
     payment.sync.notification.status === "success" &&
     payment.sync.notification.lastSyncedPaymentStatus === notificationStatus;
@@ -121,6 +127,38 @@ const syncPaymentLifecycle = async (payment) => {
         lastSyncedPaymentStatus: appointmentStatus,
       };
       logger.error("Appointment sync failed", {
+        appointmentId: payment.appointmentId,
+        paymentId: payment._id.toString(),
+        error: error.message,
+      });
+    }
+  }
+
+  if (payment.status === "succeeded" && !shouldSkipAppointmentWebhook) {
+    try {
+      await notifyAppointmentWebhook({
+        appointmentId: payment.appointmentId,
+        transactionId: payment.stripePaymentIntentId,
+      });
+
+      payment.sync.appointmentWebhook = {
+        ...createSyncState(
+          "success",
+          null,
+          payment.sync.appointmentWebhook?.retryCount || 0,
+        ),
+        lastSyncedPaymentStatus: "CONFIRMED",
+      };
+    } catch (error) {
+      payment.sync.appointmentWebhook = {
+        ...createSyncState(
+          "failed",
+          error.message,
+          payment.sync.appointmentWebhook?.retryCount || 0,
+        ),
+        lastSyncedPaymentStatus: "CONFIRMED",
+      };
+      logger.error("Appointment webhook notification failed", {
         appointmentId: payment.appointmentId,
         paymentId: payment._id.toString(),
         error: error.message,
